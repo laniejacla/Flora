@@ -1556,96 +1556,6 @@ function SubjectPills({ r, size }) {
     </span>);
 }
 
-/* ───────────────── suggested descriptions ─────────────────
-   A parent looking at forty photos at quarter end can't face writing forty
-   captions. Flora offers one it can see in the photo — she keeps it, edits
-   it, or ignores it. Nothing is written into the portfolio without her
-   pressing Use, because the caption goes out under her name. */
-async function describePhoto(blob, context = {}) {
-  const dataUrl = await new Promise(res => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.readAsDataURL(blob);
-  });
-  const base64 = dataUrl.split(",")[1];
-  const media = (dataUrl.match(/^data:([^;]+)/) || [])[1] || "image/jpeg";
-
-  const hint = [context.subject && `Subject: ${context.subject}`,
-                context.title && `Activity: ${context.title}`]
-    .filter(Boolean).join(". ");
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1000,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: media, data: base64 } },
-          { type: "text", text:
-`This is a photo from a Filipino Charlotte Mason homeschool portfolio. ${hint}
-
-Write one sentence a parent could use as the caption, describing what the child is doing or what the work shows. Plain, warm, factual. Under 18 words.
-
-Only describe what you can actually see. Don't name the child, don't guess an age, and don't praise. If the photo is unclear, say what is visible and nothing more.
-
-Reply with the sentence only — no quotes, no preamble.` },
-        ],
-      }],
-    }),
-  });
-  if (!res.ok) throw new Error("couldn't reach the description service");
-  const data = await res.json();
-  const text = (data.content || []).map(c => c.text || "").join(" ").trim();
-  if (!text) throw new Error("no description came back");
-  return text.replace(/^["']|["']$/g, "");
-}
-
-function SuggestCaption({ photo, subject, title, current, onUse }) {
-  const [state, setState] = React.useState("idle");   // idle | working | ready | error
-  const [text, setText] = React.useState("");
-  const [msg, setMsg] = React.useState("");
-
-  const run = async () => {
-    setState("working"); setMsg("");
-    try {
-      const t = await describePhoto(photo.blob, { subject, title });
-      setText(t); setState("ready");
-    } catch (e) { setMsg(String(e.message || e)); setState("error"); }
-  };
-
-  if (state === "ready") {
-    return (
-      <div style={{ marginTop: 8, background: "#f4f6f0", border: `1px solid #dde5d4`,
-        borderRadius: 9, padding: "10px 12px" }}>
-        <div style={{ fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase",
-          color: C.muted, fontWeight: 700, marginBottom: 5 }}>Suggested</div>
-        <textarea value={text} onChange={e => setText(e.target.value)} rows={2}
-          style={{ ...inp, fontSize: 13, resize: "vertical", background: "#fff" }} />
-        <div style={{ display: "flex", gap: 7, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <Btn small onClick={() => { onUse(text); setState("idle"); }}>
-            <Check size={13} /> {current ? "Replace caption" : "Use this"}</Btn>
-          <Btn small tone="quiet" onClick={run}>Try again</Btn>
-          <Btn small tone="quiet" onClick={() => setState("idle")}>Discard</Btn>
-        </div>
-        <div style={{ fontSize: 10.5, color: C.muted, marginTop: 7, lineHeight: 1.5 }}>
-          Written by AI from the photo. Read it before you use it — it goes into your portfolio
-          under your name.
-        </div>
-      </div>);
-  }
-
-  return (
-    <div style={{ marginTop: 6 }}>
-      <Btn small tone="quiet" disabled={state === "working"} onClick={run}>
-        <Sparkles size={12} /> {state === "working" ? "Looking…" : "Suggest a description"}</Btn>
-      {state === "error" && (
-        <div style={{ fontSize: 11, color: "#a4553b", marginTop: 5 }}>{msg}</div>)}
-    </div>);
-}
-
 /* ───────────────── student chip ─────────────────
    Portfolios are per child and per term. Without this on screen it's
    easy to log a whole morning against the wrong one — so who and which
@@ -3846,9 +3756,6 @@ function PageOutputs({ plan, done, fav, setFav, caps, setCaps, notes, photoVersi
                             <input value={caps[ph.id] || ""} onChange={e => setCaps({ ...caps, [ph.id]: e.target.value })}
                               placeholder="Caption for the portfolio…"
                               style={{ ...inp, minHeight: 40, fontSize: 12.5, fontStyle: "italic" }} />
-                            <SuggestCaption photo={ph} subject={meta.subject} title={meta.title}
-                              current={caps[ph.id]}
-                              onUse={t => setCaps({ ...caps, [ph.id]: t })} />
                           </div>
 
                           <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
